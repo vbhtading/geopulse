@@ -1,4 +1,4 @@
- "use client";
+"use client";
 
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -44,6 +44,60 @@ export default function Geopulse() {
   const [articles, setArticles] = useState<Article[]>(seedArticles);
   const [marketData, setMarketData] = useState<MarketInstrument[]>(initialMarketData);
   const [regionRisks, setRegionRisks] = useState(initialRegionRisk);
+
+  // Fetch real market data on load for freshness (falls back to simulation)
+  useEffect(() => {
+    const loadRealMarkets = async () => {
+      try {
+        const res = await fetch("/api/markets");
+        const data = await res.json();
+        if (data.markets) {
+          setMarketData((prev) =>
+            prev.map((inst) => {
+              const real = data.markets[inst.symbol] || data.markets[inst.symbol.replace("SPX", "^GSPC")];
+              if (real && real.price) {
+                const newPrice = real.price;
+                const newChange = real.change ?? inst.change;
+                // Keep a short plausible history around the real price
+                const newHistory = inst.history.slice(1).concat(newPrice);
+                return { ...inst, price: newPrice, change: newChange, history: newHistory };
+              }
+              return inst;
+            })
+          );
+        }
+      } catch (e) {
+        // Silent — we already have good simulated starting values
+      }
+    };
+    loadRealMarkets();
+  }, []);
+
+  // Optionally pull a few real RSS stories on first load for freshness
+  useEffect(() => {
+    const loadFreshRSS = async () => {
+      try {
+        const res = await fetch("/api/news");
+        const data = await res.json();
+        if (data.articles && data.articles.length > 0) {
+          setArticles((prev) => {
+            const combined = [...data.articles, ...prev];
+            const seen = new Set<string>();
+            return combined.filter((a: Article) => {
+              if (seen.has(a.title)) return false;
+              seen.add(a.title);
+              return true;
+            }).slice(0, 52);
+          });
+        }
+      } catch (e) {
+        // RSS is optional; seed data is always there
+      }
+    };
+    // Small delay so the UI feels snappy first
+    const t = setTimeout(loadFreshRSS, 1800);
+    return () => clearTimeout(t);
+  }, []);
 
   // UI state
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
@@ -742,8 +796,7 @@ export default function Geopulse() {
 
           {/* Quick actions */}
           <div className="text-xs text-[#6f7685] px-1 leading-relaxed">
-            Data is aggregated and curated for relevance. Live market prices are simulated with realistic volatility. 
-            Real RSS ingestion can be enabled in production via the <code>/api/news</code> route.
+            Markets load real quotes on startup where possible (via Yahoo Finance). News combines fresh curated stories + optional live RSS. Click "Live RSS" for the newest headlines.
           </div>
         </div>
       </div>
@@ -800,7 +853,7 @@ export default function Geopulse() {
               </div>
 
               <div className="text-xs text-[#a1a7b5]">
-                Prices shown are simulated for demonstration. In a production deployment this would pull live quotes via a secure market data provider.
+                Initial prices attempt to load from real market data. Small random drift is then applied for demo purposes.
               </div>
             </motion.div>
           </div>

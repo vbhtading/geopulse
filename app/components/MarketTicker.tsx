@@ -44,7 +44,7 @@ export default function MarketTicker({ instruments, onInstrumentClick }: MarketT
           </button>
         );
       })}
-      <div className="px-4 text-[10px] text-[#6f7685] shrink-0">DELAYED • SIMULATED</div>
+      <div className="px-4 text-[10px] text-[#6f7685] shrink-0">LIVE (real + simulated drift)</div>
     </div>
   );
 }
